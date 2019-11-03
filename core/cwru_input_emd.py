@@ -8,8 +8,10 @@ from PyEMD import EEMD
 TIME_PERIODS = 400
 # 标签类别
 LABEL_SIZE = 10
-# IMF样本分量长度
+# 转化成IMF分量长度
 IMF_LENGTH = 7
+# IMF样本保留分量长度
+IMF_X_LENGTH = 3
 
 
 def read_data():
@@ -78,9 +80,9 @@ def _shuffle(x, y):
     return x, y
 
 
-def read_emd():
+def read_emd_1():
     """
-    读取转化后的emd_data文件
+    读取转化后的emd_data文件,一维卷积，准确率很低
     :return:
     """
     x_train = np.zeros((0, TIME_PERIODS))
@@ -93,8 +95,8 @@ def read_emd():
         # x = IMF_LENGTH * TIME_PERIOD,每个分量作为一个样本
         x = np.loadtxt("../emd_data/" + str(TIME_PERIODS) + "/" + item)
         x = x.reshape(-1, IMF_LENGTH, TIME_PERIODS)
-        # 取前6个
-        x = x[:, :6, :]
+        # 取第一维主向量IMF，准确率能达到95%以上
+        x = x[:, :1, :]
         # 每个二维样本，作为行展开，得到x.shape[0] * x.shape[1]个样本
         x = x.reshape(x.shape[0] * x.shape[1], -1)
         n = x.shape[0]
@@ -110,5 +112,103 @@ def read_emd():
     return x_train, y_train, x_test, y_test
 
 
+def read_emd_to_normal():
+    """
+    读取转化后的emd_data文件,每个样本按照(IMF_LENGTH, TIME_PERIODS)样本返回
+    :return:
+    """
+    x_train = np.zeros((0, IMF_X_LENGTH, TIME_PERIODS))
+    x_test = np.zeros((0, IMF_X_LENGTH, TIME_PERIODS))
+    y_train = []
+    y_test = []
+    i = 0
+    for item in os.listdir("../emd_data/" + str(TIME_PERIODS)):
+        print("read %s" % item)
+        # x = IMF_LENGTH * TIME_PERIOD,每个分量作为一个样本
+        x = np.loadtxt("../emd_data/" + str(TIME_PERIODS) + "/" + item)
+        x = x.reshape(-1, IMF_LENGTH, TIME_PERIODS)
+        # 取前IMF_X_LENGTH个
+        x = x[:, :IMF_X_LENGTH, :]
+        n = x.shape[0]
+        # 按3/4比例为训练数据，1/4为测试数据
+        n_split = int((3 * n / 4))
+        # 二维数组填充,增量式填充
+        x_train = np.vstack((x_train, x[:n_split]))
+        x_test = np.vstack((x_test, x[n_split:]))
+        # [0]+[1] = [0, 1],不断累积标签
+        y_train += [i] * n_split
+        y_test += [i] * (x.shape[0] - n_split)
+        i += 1
+    return x_train, y_train, x_test, y_test
+
+
+def read_emd_to_img():
+    """
+    读取转化后的emd_data文件,类似图片处理，每个样本按照(1, TIME_PERIODS, IMF_LENGTH)维度返回
+    :return:
+    """
+    x_train = np.zeros((0, 1, TIME_PERIODS, IMF_X_LENGTH))
+    x_test = np.zeros((0, 1, TIME_PERIODS, IMF_X_LENGTH))
+    y_train = []
+    y_test = []
+    i = 0
+    for item in os.listdir("../emd_data/" + str(TIME_PERIODS)):
+        print("read %s" % item)
+        # x = IMF_LENGTH * TIME_PERIOD,每个分量作为一个样本
+        x = np.loadtxt("../emd_data/" + str(TIME_PERIODS) + "/" + item)
+        # 读取样本，还原
+        x = x.reshape(-1, IMF_LENGTH, TIME_PERIODS)
+        # 将IMF作为深度变换（类似图片的RGB），转化成1*TIME_PERIODS*IMF_LENGTH
+        x_1 = np.zeros((x.shape[0], 1, TIME_PERIODS, IMF_LENGTH))
+        for j in range(x.shape[0]):
+            # 每个样本做一个转置
+            x_1[j, 0] = x[i].reshape(IMF_LENGTH, TIME_PERIODS).T
+        # 取前IMF_X_LENGTH个
+        x_1 = x_1[:, :, :, :IMF_X_LENGTH]
+        n = x_1 .shape[0]
+        # 按3/4比例为训练数据，1/4为测试数据
+        n_split = int((3 * n / 4))
+        # 二维数组填充,增量式填充
+        x_train = np.vstack((x_train, x_1[:n_split]))
+        x_test = np.vstack((x_test, x_1[n_split:]))
+        # [0]+[1] = [0, 1],不断累积标签
+        y_train += [i] * n_split
+        y_test += [i] * (x.shape[0] - n_split)
+        i += 1
+    return x_train, y_train, x_test, y_test
+
+
+def test_x_reshape():
+    """
+    测试x存储和读取转换
+    :return:
+    """
+    # 初始化一个随机样本
+    input_length = 2
+    x = np.zeros((input_length, IMF_X_LENGTH, TIME_PERIODS))
+    for i in range(x.shape[0]):
+        # 模拟emd
+        x_i = np.random.random((IMF_X_LENGTH, TIME_PERIODS))
+        x[i] = x_i
+
+    # 将每个输入样本拉平，存储
+    b = x.reshape(input_length, -1)
+
+    # 读取样本，还原
+    c = b.reshape(-1, IMF_X_LENGTH, TIME_PERIODS)
+    # 比较第一个样本的IMF分量
+    # print(np.equal(x[0, 0], c[0, 0]))
+
+    # 将IMF作为深度变换，转化成1*TIME_PERIODS*IMF_LENGTH
+    d = np.zeros((input_length, 1, TIME_PERIODS, IMF_X_LENGTH))
+    for i in range(b.shape[0]):
+        # 每个样本做一个转置，再叠加
+        a = b[i].reshape(IMF_X_LENGTH, TIME_PERIODS).T
+        d[i, 0] = a
+    print(np.equal(x[0, 0], d[0, 0, :, 0]))
+
+
 if __name__ == "__main__":
-    read_emd()
+    # x_train, y_train, x_test, y_test = read_emd_2()
+    # print(x_train.shape)
+    read_emd_to_img()

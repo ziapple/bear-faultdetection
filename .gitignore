@@ -1,0 +1,7 @@
+/emd_data
+/model
+*.h5
+/core/__pycache__
+/.idea
+/core/*.h5
+/data
