@@ -1,4 +1,5 @@
 from scipy.io import loadmat
+import matplotlib.pyplot as plt
 import numpy as np
 import random
 import os
@@ -11,7 +12,7 @@ LABEL_SIZE = 10
 # 转化成IMF分量长度
 IMF_LENGTH = 7
 # IMF样本保留分量长度
-IMF_X_LENGTH = 3
+IMF_X_LENGTH = 6
 
 
 def read_data():
@@ -208,7 +209,25 @@ def test_x_reshape():
     print(np.equal(x[0, 0], d[0, 0, :, 0]))
 
 
+# 画图
+def draw_emd(imfs):
+    nIMFs = imfs.shape[0]
+    print(imfs.shape)
+    t = np.linspace(0, 1, TIME_PERIODS, endpoint=False)
+    plt.figure(figsize=(12, 9))
+    for i in range(nIMFs):
+        plt.plot(t, imfs[i], 'g')
+        plt.ylabel("eIMF %i" % (i+1))
+        plt.locator_params(axis='y', nbins=5)
+
+    plt.xlabel("Time [s]")
+    plt.tight_layout()
+    plt.savefig('IMF', dpi=120)
+    plt.show()
+
+
 if __name__ == "__main__":
     # x_train, y_train, x_test, y_test = read_emd_2()
     # print(x_train.shape)
-    read_emd_to_img()
+    x_train, y_train, x_test, y_test = read_emd_to_normal()
+    draw_emd(x_train[0])

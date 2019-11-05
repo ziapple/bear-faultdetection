@@ -66,6 +66,7 @@ def model_valid():
 
 if __name__ == "__main__":
     # model_train()
-    model_valid()
+    # model_valid()
+    build_model()
 
 
